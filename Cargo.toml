@@ -2,6 +2,9 @@
 name = "seli-vector-db"
 version = "0.1.0"
 edition = "2024"
+description = "A simple vector database in Rust using an IVF index for approximate nearest neighbor search"
+license = "MIT OR Apache-2.0"
+authors = ["selithrarion <werre8788@gmail.com>"]
 
 [dependencies]
 bincode = "2.0.1"
