@@ -1,13 +1,19 @@
-use crate::{Vector, dot_product, normalize, VectorDBError};
+use crate::{Vector, VectorDBError, dot_product, normalize};
+use bincode::{Decode, Encode};
 use rand::prelude::IndexedRandom;
 
+#[derive(Encode, Decode)]
 pub struct IVFIndex {
     centroids: Vec<Vector>,
-    inverted_file: Vec<Vec<usize>>
+    inverted_file: Vec<Vec<usize>>,
 }
 
 impl IVFIndex {
-    pub fn train(data: &[Vector], num_clusters: usize, max_iterations: usize) -> Result<Self, VectorDBError> {
+    pub fn train(
+        data: &[Vector],
+        num_clusters: usize,
+        max_iterations: usize,
+    ) -> Result<Self, VectorDBError> {
         if data.is_empty() {
             return Err(VectorDBError::EmptyDataSet);
         }
@@ -18,7 +24,8 @@ impl IVFIndex {
         #[cfg(debug_assertions)]
         println!("Training IVF with {} clusters...", num_clusters);
 
-        let mut centroids: Vec<Vector> = data.choose_multiple(&mut rand::rng(), num_clusters)
+        let mut centroids: Vec<Vector> = data
+            .choose_multiple(&mut rand::rng(), num_clusters)
             .cloned()
             .collect();
         let mut cluster_assignments = vec![0; data.len()];
@@ -30,8 +37,12 @@ impl IVFIndex {
                     .iter()
                     .enumerate()
                     .map(|(ci, centroid)| (ci, dot_product(point, centroid)))
-                    .max_by(|a,b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-                    .ok_or(VectorDBError::InternalError("Could not determine closest centroid"))?;
+                    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                    .ok_or_else(|| {
+                        VectorDBError::InternalError(
+                            "Could not determine closest centroid".to_string(),
+                        )
+                    })?;
 
                 if cluster_assignments[point_idx] != closest_centroid_idx {
                     cluster_assignments[point_idx] = closest_centroid_idx;
@@ -81,8 +92,13 @@ impl IVFIndex {
         })
     }
 
-    pub fn query<'a>(&'a self, query: &'a Vector, nprobe: usize) -> impl Iterator<Item = usize> + 'a {
-        let mut centroid_scores: Vec<(usize, f32)> = self.centroids
+    pub fn query<'a>(
+        &'a self,
+        query: &'a Vector,
+        nprobe: usize,
+    ) -> impl Iterator<Item = usize> + 'a {
+        let mut centroid_scores: Vec<(usize, f32)> = self
+            .centroids
             .iter()
             .enumerate()
             .map(|(id, centroid)| (id, dot_product(query, centroid)))
@@ -94,5 +110,9 @@ impl IVFIndex {
             .filter_map(move |(cluster_id, _)| self.inverted_file.get(cluster_id))
             .flatten()
             .copied()
+    }
+
+    pub fn num_clusters(&self) -> usize {
+        self.centroids.len()
     }
 }

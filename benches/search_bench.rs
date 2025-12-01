@@ -1,7 +1,7 @@
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use rand::Rng;
-use vector_db::{Vector, VectorDB};
+use seli_vector_db::{Vector, VectorDB};
+use std::hint::black_box;
 // use hnsw::{Hnsw, Searcher};
 // use space::Metric;
 //
@@ -38,9 +38,7 @@ fn bench_search(c: &mut Criterion) {
         db_brute.add(vec.clone());
     }
     c.bench_function("brute_force_10k", |b| {
-        b.iter(|| {
-            db_brute.search(black_box(&query), black_box(k), 1)
-        })
+        b.iter(|| db_brute.search(black_box(&query), black_box(k), 1))
     });
 
     let mut db_ivf = VectorDB::new();
@@ -49,13 +47,13 @@ fn bench_search(c: &mut Criterion) {
     }
     let num_clusters = (num_vectors as f64).sqrt() as usize;
     let max_iterations = 20;
-    db_ivf.build_index(num_clusters, max_iterations).expect("Failed to build IVF index for benchmark");
+    db_ivf
+        .build_index(num_clusters, max_iterations)
+        .expect("Failed to build IVF index for benchmark");
     let nprobe = 5;
     let bench_name = format!("ivf_10k_nprobe_{}", nprobe);
     c.bench_function(&bench_name, |b| {
-        b.iter(|| {
-            db_ivf.search(black_box(&query), black_box(k), black_box(nprobe))
-        })
+        b.iter(|| db_ivf.search(black_box(&query), black_box(k), black_box(nprobe)))
     });
 
     // let mut searcher = Searcher::new();
