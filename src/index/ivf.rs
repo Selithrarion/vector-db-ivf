@@ -1,6 +1,6 @@
-use crate::{Vector, VectorDBError, dot_product, normalize};
+use crate::{Vector, VectorDBError, dot_product, normalize, VectorSlice};
 use bincode::{Decode, Encode};
-use rand::prelude::IndexedRandom;
+use rand::prelude::{IteratorRandom};
 
 #[derive(Encode, Decode)]
 pub struct IVFIndex {
@@ -10,7 +10,8 @@ pub struct IVFIndex {
 
 impl IVFIndex {
     pub fn train(
-        data: &[Vector],
+        data: &VectorSlice,
+        dim: usize,
         num_clusters: usize,
         max_iterations: usize,
     ) -> Result<Self, VectorDBError> {
@@ -25,14 +26,16 @@ impl IVFIndex {
         println!("Training IVF with {} clusters...", num_clusters);
 
         let mut centroids: Vec<Vector> = data
+            .chunks_exact(dim)
             .choose_multiple(&mut rand::rng(), num_clusters)
-            .cloned()
+            .into_iter()
+            .map(|v| v.to_vec())
             .collect();
-        let mut cluster_assignments = vec![0; data.len()];
+        let mut cluster_assignments = vec![0; data.len() / dim];
 
-        for i in 0..max_iterations {
+        for _i in 0..max_iterations {
             let mut changed = false;
-            for (point_idx, point) in data.iter().enumerate() {
+            for (point_idx, point) in data.chunks_exact(dim).enumerate() {
                 let (closest_centroid_idx, _) = centroids
                     .iter()
                     .enumerate()
@@ -50,12 +53,13 @@ impl IVFIndex {
                 }
             }
 
-            let mut new_centroids = vec![vec![0.0; data[0].len()]; num_clusters];
+            let mut new_centroids = vec![vec![0.0; dim]; num_clusters];
             let mut counts = vec![0; num_clusters];
             for (point_idx, &cluster_idx) in cluster_assignments.iter().enumerate() {
-                let point = &data[point_idx];
-                for (dim, val) in point.iter().enumerate() {
-                    new_centroids[cluster_idx][dim] += val;
+                let start = point_idx * dim;
+                let point = &data[start..start + dim];
+                for (i, val) in point.iter().enumerate() {
+                    new_centroids[cluster_idx][i] += val;
                 }
                 counts[cluster_idx] += 1;
             }
@@ -71,10 +75,10 @@ impl IVFIndex {
             }
 
             #[cfg(debug_assertions)]
-            println!("Iteration {}: assignments changed: {}", i + 1, changed);
+            println!("Iteration {}: assignments changed: {}", _i + 1, changed);
             if !changed {
                 #[cfg(debug_assertions)]
-                println!("Converged after {} iterations", i + 1);
+                println!("Converged after {} iterations", _i + 1);
                 break;
             }
         }
@@ -94,7 +98,7 @@ impl IVFIndex {
 
     pub fn query<'a>(
         &'a self,
-        query: &'a Vector,
+        query: &'a VectorSlice,
         nprobe: usize,
     ) -> impl Iterator<Item = usize> + 'a {
         let mut centroid_scores: Vec<(usize, f32)> = self

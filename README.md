@@ -30,3 +30,6 @@ $env:RUSTFLAGS='-C target-cpu=native'; cargo bench
 
 normalize simd optimization nothing changed, became kinda worse
 
+flat memory layout (Vec<Vec32>> to Vec<32>) didnt help much - brute force 400 µs
+
+

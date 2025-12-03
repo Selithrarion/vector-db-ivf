@@ -9,6 +9,7 @@ use thiserror::Error;
 use wide::f32x8;
 
 pub type Vector = Vec<f32>;
+pub type VectorSlice = [f32];
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct SearchResult {
@@ -34,7 +35,7 @@ pub enum VectorDBError {
     BincodeEncode(#[from] Box<bincode::error::EncodeError>),
 }
 
-fn normalize(vector: &mut Vector) {
+fn normalize(vector: &mut VectorSlice) {
     let norm_sq = dot_product(vector, vector);
     let norm = norm_sq.sqrt();
 
@@ -47,7 +48,7 @@ fn normalize(vector: &mut Vector) {
 
 
 #[inline(always)]
-fn dot_product(a: &Vector, b: &Vector) -> f32 {
+fn dot_product(a: &VectorSlice, b: &VectorSlice) -> f32 {
     let len = a.len().min(b.len());
     let remainder_start = len - (len % 8);
 
@@ -69,7 +70,8 @@ fn dot_product(a: &Vector, b: &Vector) -> f32 {
 
 #[derive(Encode, Decode)]
 pub struct VectorDB {
-    vectors: Vec<Vector>,
+    vectors: Vec<f32>,
+    dim: usize,
     index: Option<IVFIndex>,
 }
 
@@ -82,6 +84,7 @@ impl VectorDB {
     pub fn new() -> Self {
         Self {
             vectors: Vec::new(),
+            dim: 0,
             index: None,
         }
     }
@@ -91,36 +94,44 @@ impl VectorDB {
         num_clusters: usize,
         max_iterations: usize,
     ) -> Result<(), VectorDBError> {
-        let index = IVFIndex::train(&self.vectors, num_clusters, max_iterations)?;
+        let index = IVFIndex::train(&self.vectors, self.dim, num_clusters, max_iterations)?;
         self.index = Some(index);
         Ok(())
     }
 
-    pub fn add(&mut self, mut vector: Vector) -> usize {
+    pub fn add(&mut self, mut vector: Vec<f32>) -> Result<usize, VectorDBError> {
+        if self.vectors.is_empty() {
+            self.dim = vector.len();
+        } else if self.dim != vector.len() {
+            return Err(VectorDBError::DimensionMismatch);
+        }
+
         if self.index.is_some() {
             self.index = None;
             println!("Index invalidated by adding new data. Need to rebuild");
         }
 
         normalize(&mut vector);
-        let id = self.vectors.len();
-        self.vectors.push(vector);
-        id
+        let id = self.vectors.len() / self.dim;
+        self.vectors.extend(vector);
+        Ok(id)
     }
 
-    pub fn search(&self, query: &Vector, k: usize, nprobe: usize) -> Vec<SearchResult> {
+    pub fn search(&self, query: &VectorSlice, k: usize, nprobe: usize) -> Vec<SearchResult> {
         if self.vectors.is_empty() {
             return Vec::new();
         }
 
-        let mut normalized_query = query.clone();
+        let mut normalized_query = query.to_vec();
         normalize(&mut normalized_query);
 
         let mut scores: Vec<SearchResult> = if let Some(index) = &self.index {
             let candidate_ids = index.query(&normalized_query, nprobe);
             candidate_ids
                 .map(|id| {
-                    let vec = &self.vectors[id];
+                    let start = id * self.dim;
+                    let end = start + self.dim;
+                    let vec = &self.vectors[start..end];
                     SearchResult {
                         id,
                         score: dot_product(&normalized_query, vec),
@@ -129,7 +140,7 @@ impl VectorDB {
                 .collect()
         } else {
             self.vectors
-                .iter()
+                .chunks_exact(self.dim)
                 .enumerate()
                 .map(|(id, vec)| SearchResult {
                     id,
@@ -147,7 +158,7 @@ impl VectorDB {
     }
 
     pub fn len(&self) -> usize {
-        self.vectors.len()
+        self.vectors.len() / self.dim
     }
 
     pub fn is_empty(&self) -> bool {
@@ -174,7 +185,7 @@ impl VectorDB {
     }
 }
 
-pub fn cosine_similarity(a: &Vector, b: &Vector) -> Option<f32> {
+pub fn cosine_similarity(a: &VectorSlice, b: &VectorSlice) -> Option<f32> {
     if a.len() != b.len() || a.is_empty() {
         return None;
     }

@@ -11,11 +11,11 @@ fn main() -> Result<()> {
         Err(_) => {
             println!("No existing DB found. Creating a new one.");
             let mut db = VectorDB::new();
-            db.add(vec![1.0, 0.0, 0.0]); // id 0
-            db.add(vec![0.0, 1.0, 0.0]); // id 1
-            db.add(vec![0.9, 0.1, 0.05]); // id 2 (similar to id 0)
-            db.add(vec![-1.0, 0.0, 0.0]); // id 3 (opposite of id 0)
-            db.add(vec![0.5, 0.5, 0.5]); // id 4
+            db.add(vec![1.0, 0.0, 0.0])?; // id 0
+            db.add(vec![0.0, 1.0, 0.0])?; // id 1
+            db.add(vec![0.9, 0.1, 0.05])?; // id 2 (similar to id 0)
+            db.add(vec![-1.0, 0.0, 0.0])?; // id 3 (opposite of id 0)
+            db.add(vec![0.5, 0.5, 0.5])?; // id 4
             db
         }
     };

@@ -1,6 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use rand::Rng;
-use seli_vector_db::{Vector, VectorDB};
+use seli_vector_db::{VectorDB};
 use std::hint::black_box;
 // use hnsw::{Hnsw, Searcher};
 // use space::Metric;
@@ -19,7 +19,7 @@ use std::hint::black_box;
 //     }
 // }
 
-fn generate_random_vector(size: usize) -> Vector {
+fn generate_random_vector(size: usize) -> Vec<f32> {
     rand::rng().random_iter().take(size).collect()
 }
 
@@ -28,14 +28,14 @@ fn bench_search(c: &mut Criterion) {
     let num_vectors = 10_000;
     let k = 10;
 
-    let vectors: Vec<Vector> = (0..num_vectors)
+    let vectors: Vec<Vec<f32>> = (0..num_vectors)
         .map(|_| generate_random_vector(dim))
         .collect();
     let query = generate_random_vector(dim);
 
     let mut db_brute = VectorDB::new();
     for vec in &vectors {
-        db_brute.add(vec.clone());
+        db_brute.add(vec.clone()).unwrap();
     }
     c.bench_function("brute_force_10k", |b| {
         b.iter(|| db_brute.search(black_box(&query), black_box(k), 1))
@@ -43,7 +43,7 @@ fn bench_search(c: &mut Criterion) {
 
     let mut db_ivf = VectorDB::new();
     for vec in &vectors {
-        db_ivf.add(vec.clone());
+        db_ivf.add(vec.clone()).unwrap();
     }
     let num_clusters = (num_vectors as f64).sqrt() as usize;
     let max_iterations = 20;
