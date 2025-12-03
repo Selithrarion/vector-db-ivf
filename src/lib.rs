@@ -6,6 +6,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use thiserror::Error;
+use wide::f32x8;
 
 pub type Vector = Vec<f32>;
 
@@ -34,17 +35,36 @@ pub enum VectorDBError {
 }
 
 fn normalize(vector: &mut Vector) {
-    let norm = vector.iter().map(|&val| val * val).sum::<f32>().sqrt();
+    let norm_sq = dot_product(vector, vector);
+    let norm = norm_sq.sqrt();
+
     if norm > 0.0 {
-        for val in vector.iter_mut() {
+        for val in vector {
             *val /= norm;
         }
     }
 }
 
+
 #[inline(always)]
 fn dot_product(a: &Vector, b: &Vector) -> f32 {
-    a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+    let len = a.len().min(b.len());
+    let remainder_start = len - (len % 8);
+
+    let mut sum_vec = f32x8::ZERO;
+    let a_chunks = a[..remainder_start].chunks_exact(8);
+    let b_chunks = b[..remainder_start].chunks_exact(8);
+
+    for (a_chunk, b_chunk) in a_chunks.zip(b_chunks) {
+        let a_simd = f32x8::new(a_chunk.try_into().unwrap());
+        let b_simd = f32x8::new(b_chunk.try_into().unwrap());
+        sum_vec += a_simd * b_simd;
+    }
+
+    let mut total = sum_vec.reduce_add();
+    total += a[remainder_start..].iter().zip(&b[remainder_start..]).map(|(x, y)| x * y).sum::<f32>();
+
+    total
 }
 
 #[derive(Encode, Decode)]

@@ -20,6 +20,13 @@ $env:RUSTFLAGS='-C target-cpu=native'; cargo bench
 10.000 vectors, k 10, brute force + normalize - 1.5 ms  
 10.000 vectors, k 10, ivf_1k_nprobe_5 + vec for index - 83 µs  
 
-10.000 vectors, k 10, brute force + normalize - 1.5 ms  
+---
+
+10.000 vectors, k 10, brute force + simd rustflag - 1.5 ms  
 10.000 vectors, k 10, ivf_1k_nprobe_5 + simd rustflag 73 µs  
+
+10.000 vectors, k 10, brute force + wide for simd (dot product optimized) - 405 µs   
+10.000 vectors, k 10, ivf_1k_nprobe_5 + wide for simd (dot product optimized) - 20-25 µs  
+
+normalize simd optimization nothing changed, became kinda worse
 
